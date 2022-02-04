@@ -1,0 +1,547 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualNetworks_amaaks_name": {
+      "defaultValue": "amaaks-vnet",
+      "type": "String"
+    },
+    "clusterName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Managed Cluster resource."
+      },
+      "defaultValue": "amaaks-cluster"
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "The location of AKS resource."
+      },
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "workspaceSku": {
+      "type": "string",
+      "metadata": {
+        "description": "Names of the workspace."
+      },
+      "defaultValue": "pergb2018"
+    },
+    "dnsPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Optional DNS prefix to use with hosted Kubernetes API server FQDN."
+      },
+      "defaultValue": "[resourceGroup().name]"
+    },
+    "osDiskSizeGB": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Disk size (in GiB) to provision for each of the agent pool nodes. This value ranges from 0 to 1023. Specifying 0 will apply the default disk size for that agentVMSize."
+      },
+      "minValue": 0,
+      "maxValue": 1023
+    },
+    "kubernetesVersion": {
+      "type": "string",
+      "defaultValue": "1.22.4",
+      "metadata": {
+        "description": "The version of Kubernetes."
+      }
+    },
+    "networkPlugin": {
+      "type": "string",
+      "allowedValues": [
+        "azure",
+        "kubenet"
+      ],
+      "metadata": {
+        "description": "Network plugin used for building Kubernetes network."
+      },
+      "defaultValue": "azure"
+    },
+    "enableRBAC": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Boolean flag to turn on and off of RBAC."
+      }
+    },
+    "enablePrivateCluster": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable private network access to the Kubernetes cluster."
+      }
+    },
+    "enableHttpApplicationRouting": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Boolean flag to turn on and off http application routing."
+      }
+    },
+    "enableAzurePolicy": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Boolean flag to turn on and off Azure Policy addon."
+      }
+    },
+    "enableOmsAgent": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Boolean flag to turn on and off omsagent addon."
+      }
+    },
+    "serviceCidr": {
+      "type": "string",
+      "metadata": {
+        "description": "A CIDR notation IP range from which to assign service cluster IPs."
+      },
+      "defaultValue": "11.0.0.0/22"
+    },
+    "dnsServiceIP": {
+      "type": "string",
+      "metadata": {
+        "description": "Containers DNS server IP address."
+      },
+      "defaultValue": "11.0.0.10"
+    },
+    "dockerBridgeCidr": {
+      "type": "string",
+      "metadata": {
+        "description": "A CIDR notation IP for Docker bridge."
+      },
+      "defaultValue": "172.17.0.1/16"
+    },
+    "networkInterfaceName": {
+      "type": "string",
+      "defaultValue": "amaaks-nic"
+    },
+    "networkSecurityGroupName": {
+      "type": "string",
+      "defaultValue": "amaaks-nsg"
+    },
+    "networkSecurityGroupRules": {
+      "type": "array",
+      "defaultValue": [
+        {
+          "name": "SSH",
+          "properties": {
+            "priority": 300,
+            "protocol": "TCP",
+            "access": "Allow",
+            "direction": "Inbound",
+            "sourceAddressPrefix": "*",
+            "sourcePortRange": "*",
+            "destinationAddressPrefix": "*",
+            "destinationPortRange": "22"
+          }
+        }
+      ]
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": "default"
+    },
+    "publicIpAddressName": {
+      "type": "string",
+      "defaultValue": "amaaks-vm-ip"
+    },
+    "k8sIpAddressName": {
+      "type": "string",
+      "defaultValue": "amaaks-k8s-ip"
+    },
+    "publicIpAddressType": {
+      "type": "string",
+      "defaultValue": "Static"
+    },
+    "publicIpAddressSku": {
+      "type": "string",
+      "defaultValue": "Standard"
+    },
+    "virtualMachineName": {
+      "type": "string",
+      "defaultValue": "amaaks-vm"
+    },
+    "virtualMachineHostnameName": {
+      "type": "string",
+      "defaultValue": "amaaks"
+    },
+    "osDiskType": {
+      "type": "string",
+      "defaultValue": "Premium_LRS"
+    },
+    "virtualMachineSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS2_v2"
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "amaaks"
+    },
+    "adminPassword": {
+      "type": "secureString"
+    },
+    "zone": {
+      "type": "string",
+      "defaultValue": "1"
+    }
+  },
+  "variables": {
+    "resourceGroup": "[resourceGroup().name]",
+    "nsgId": "[resourceId(variables('resourceGroup'), 'Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]",
+    "vnetId": "[resourceId(variables('resourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworks_amaaks_name') )]",
+    "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]",
+    "workspaceName": "[concat(resourceGroup().name, '-workspace')]",
+    "vm-script": "IyEvYmluL2Jhc2gKCiMgUmVxdWlyZXMgVWJ1bnR1IGhvc3QgMTguMDQgRFMyX1YyIHVzaW5nIGhvc3RuYW1lIGFuZCB1c2VyIGFtYWFrcwoKIyBJbnN0YWxsIERvY2tlciBodHRwczovL2RvY3MuZG9ja2VyLmNvbS9lbmdpbmUvaW5zdGFsbC91YnVudHUvCnN1ZG8gYXB0LWdldCB1cGRhdGVzCnN1ZG8gYXB0LWdldCB1cGdyYWRlIC15CnN1ZG8gYXB0LWdldCBpbnN0YWxsIC15IFwKICAgIGFwdC10cmFuc3BvcnQtaHR0cHMgXAogICAgY2EtY2VydGlmaWNhdGVzIFwKICAgIGN1cmwgXAogICAgZ251cGctYWdlbnQgXAogICAgc29mdHdhcmUtcHJvcGVydGllcy1jb21tb24KY3VybCAtZnNTTCBodHRwczovL2Rvd25sb2FkLmRvY2tlci5jb20vbGludXgvdWJ1bnR1L2dwZyB8IHN1ZG8gYXB0LWtleSBhZGQgLQpzdWRvIGFwdC1rZXkgZmluZ2VycHJpbnQgMEVCRkNEODgKc3VkbyBhZGQtYXB0LXJlcG9zaXRvcnkgXAogICAiZGViIFthcmNoPWFtZDY0XSBodHRwczovL2Rvd25sb2FkLmRvY2tlci5jb20vbGludXgvdWJ1bnR1IFwKICAgJChsc2JfcmVsZWFzZSAtY3MpIFwKICAgc3RhYmxlIgpzdWRvIGFwdC1nZXQgdXBkYXRlCnN1ZG8gYXB0LWdldCBpbnN0YWxsIC15IGRvY2tlci1jZSBkb2NrZXItY2UtY2xpIGNvbnRhaW5lcmQuaW8Kc3VkbyB1c2VybW9kIC1hRyBkb2NrZXIgYW1hYWtzCgojIEluc3RhbGwgRG9ja2VyLUNvbXBvc2UKc3VkbyBjdXJsIC1MICJodHRwczovL2dpdGh1Yi5jb20vZG9ja2VyL2NvbXBvc2UvcmVsZWFzZXMvZG93bmxvYWQvMS4yNy40L2RvY2tlci1jb21wb3NlLSQodW5hbWUgLXMpLSQodW5hbWUgLW0pIiAtbyAvdXNyL2xvY2FsL2Jpbi9kb2NrZXItY29tcG9zZQpzdWRvIGNobW9kICt4IC91c3IvbG9jYWwvYmluL2RvY2tlci1jb21wb3NlCnN1ZG8gbG4gLXMgL3Vzci9sb2NhbC9iaW4vZG9ja2VyLWNvbXBvc2UgL3Vzci9iaW4vZG9ja2VyLWNvbXBvc2UKCiMgSW5zdGFsbCBIQVJEQk9SIGh0dHBzOi8vZ29oYXJib3IuaW8vZG9jcy8yLjAuMC9pbnN0YWxsLWNvbmZpZy9jb25maWd1cmUtaHR0cHMvCndnZXQgaHR0cHM6Ly9naXRodWIuY29tL2dvaGFyYm9yL2hhcmJvci9yZWxlYXNlcy9kb3dubG9hZC92Mi4xLjAvaGFyYm9yLW9mZmxpbmUtaW5zdGFsbGVyLXYyLjEuMC50Z3oKdGFyIC14dmYgaGFyYm9yLW9mZmxpbmUtaW5zdGFsbGVyLXYyLjEuMC50Z3oKY2QgaGFyYm9yCgpvcGVuc3NsIHJhbmQgLW91dCB+Ly5ybmQgLXdyaXRlcmFuZCB+Ly5ybmQKb3BlbnNzbCBnZW5yc2EgLW91dCBjYS5rZXkgNDA5NgpvcGVuc3NsIHJlcSAteDUwOSAtbmV3IC1ub2RlcyAtc2hhNTEyIC1kYXlzIDM2NTAgLXN1YmogIi9DPVVTL1NUPU1BL0NOPWFtYWFrcyIgLWtleSBjYS5rZXkgLW91dCBjYS5jcnQKb3BlbnNzbCBnZW5yc2EgLW91dCBhbWFha3Mua2V5IDQwOTYKb3BlbnNzbCByZXEgLXNoYTUxMiAtbmV3ICAtc3ViaiAiL0M9VVMvU1Q9TUEvQ049YW1hYWtzIiAta2V5IGFtYWFrcy5rZXkgLW91dCBhbWFha3MuY3NyCgpjYXQgPiB2My5leHQgPDwtRU9GCmF1dGhvcml0eUtleUlkZW50aWZpZXI9a2V5aWQsaXNzdWVyCmJhc2ljQ29uc3RyYWludHM9Q0E6RkFMU0UKa2V5VXNhZ2UgPSBkaWdpdGFsU2lnbmF0dXJlLCBub25SZXB1ZGlhdGlvbiwga2V5RW5jaXBoZXJtZW50LCBkYXRhRW5jaXBoZXJtZW50CmV4dGVuZGVkS2V5VXNhZ2UgPSBzZXJ2ZXJBdXRoCnN1YmplY3RBbHROYW1lID0gQGFsdF9uYW1lcwoKW2FsdF9uYW1lc10KRE5TLjE9YW1hYWtzCkVPRgoKCm9wZW5zc2wgeDUwOSAtcmVxIC1zaGE1MTIgLWRheXMgMzY1MCBcCiAgICAtZXh0ZmlsZSB2My5leHQgXAogICAgLUNBIGNhLmNydCAtQ0FrZXkgY2Eua2V5IC1DQWNyZWF0ZXNlcmlhbCBcCiAgICAtaW4gYW1hYWtzLmNzciBcCiAgICAtb3V0IGFtYWFrcy5jcnQKCnN1ZG8gbWtkaXIgLXAgL2RhdGEvY2VydC8Kc3VkbyBjcCBhbWFha3MuY3J0IC9kYXRhL2NlcnQvCnN1ZG8gY3AgYW1hYWtzLmtleSAvZGF0YS9jZXJ0LwoKb3BlbnNzbCB4NTA5IC1pbmZvcm0gUEVNIC1pbiBhbWFha3MuY3J0IC1vdXQgYW1hYWtzLmNlcnQKc3VkbyBta2RpciAtcCAvZXRjL2RvY2tlci9jZXJ0cy5kL2FtYWFrczo0NDMKc3VkbyBjcCBhbWFha3MuY2VydCAvZXRjL2RvY2tlci9jZXJ0cy5kL2FtYWFrczo0NDMvCnN1ZG8gY3AgYW1hYWtzLmtleSAvZXRjL2RvY2tlci9jZXJ0cy5kL2FtYWFrczo0NDMvCnN1ZG8gY3AgY2EuY3J0IC9ldGMvZG9ja2VyL2NlcnRzLmQvYW1hYWtzOjQ0MwpjYXQgY2EuY3J0ID4+IHJlZ2lzdHJ5LnBlbQpjYXQgYW1hYWtzLmNlcnQgPj4gcmVnaXN0cnkucGVtCmNhdCBhbWFha3Mua2V5ID4+IHJlZ2lzdHJ5LnBlbQoKIyBVcGRhdGUgZG9ja2VyIHRvIHJlY29nbml6ZSB0aGUgaG9zdApzdWRvIGNhdCA+IGRhZW1vbi5qc29uIDw8LUVPRgp7CiAgICAiaW5zZWN1cmUtcmVnaXN0cmllcyIgOiBbICJhbWFha3MiIF0KfQpFT0YKc3VkbyBtdiBkYWVtb24uanNvbiAvZXRjL2RvY2tlci9kYWVtb24uanNvbgoKc3VkbyBzeXN0ZW1jdGwgcmVzdGFydCBkb2NrZXIKCiMjIENvbmZpZ3VyZSBIYXJiZXIgaG9zdG5hbWUgYW5kIGNlcnQta2V5IGxvY2F0aW9uCiMgY3AgaGFyYm9yLnltbC50bXBsIGhhcmJvci55bWwKd2dldCBodHRwczovL2dpdGh1Yi5jb20vc3V3YW5pMTIzL2RlbW8tYW1hLWFrcy9ibG9iL21haW4vaGFyYm9yLnltbAojICBjZXJ0aWZpY2F0ZTogL2V0Yy9kb2NrZXIvY2VydHMuZC9hbWFha3M6NDQzL2FtYWFrcy5jZXJ0CiMgIHByaXZhdGVfa2V5OiAvZXRjL2RvY2tlci9jZXJ0cy5kL2FtYWFrczo0NDMvYW1hYWtzLmtleQpzdWRvIC4vcHJlcGFyZQojc3VkbyBkb2NrZXItY29tcG9zZSBkb3duIC12CnN1ZG8gZG9ja2VyLWNvbXBvc2UgdXAgLWQKKGNyb250YWIgLWwgOyBlY2hvICJAcmVib290IHNsZWVwIDYwICYmIGNkIC9ob21lL2FtYWFrcy9oYXJib3IgJiYgZG9ja2VyLWNvbXBvc2UgdXAgLWQiKXwgY3JvbnRhYiAtCgojIENvbmZpZ3VyZSBIYXJib3IKCiMgQ3JlYXRlIFByb2plY3QKZWNobyAiU2VlZGluZyBIYXJib3IuLi4iCnNsZWVwIDMwICMgd2FybXVwIHRpbWUgZm9yIHRoZSBIYXJib3IgUmVnaXN0cnkKCmN1cmwgLXUgImFkbWluOkhhcmJvcjEyMzQ1IiBcCiAgLUggIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vanNvbiIgXAogIC1raSBodHRwczovL2FtYWFrcy9hcGkvdjIuMC9wcm9qZWN0cyBcCiAgLS1kYXRhLWJpbmFyeSAneyJwcm9qZWN0X25hbWUiOiJjb2RlNGNsb3VkcyIsInJlZ2lzdHJ5X2lkIjpudWxsLCJtZXRhZGF0YSI6eyJwdWJsaWMiOiJ0cnVlIn0sInN0b3JhZ2VfbGltaXQiOi0xfScgXAogIC0tY29tcHJlc3NlZCBcCiAgLS1pbnNlY3VyZQoKIyBDcmVhdGUgUmVnaXN0cnkgRW5kcG9pbnQKY3VybCAtdSAiYWRtaW46SGFyYm9yMTIzNDUiIFwKICAtSCAiQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uIiBcCiAgLWtpIGh0dHBzOi8vYW1hYWtzL2FwaS92Mi4wL3JlZ2lzdHJpZXMgXAogIC0tZGF0YS1iaW5hcnkgJ3siY3JlZGVudGlhbCI6eyJhY2Nlc3Nfa2V5IjoiIiwiYWNjZXNzX3NlY3JldCI6IiIsInR5cGUiOiJiYXNpYyJ9LCJkZXNjcmlwdGlvbiI6IiIsImluc2VjdXJlIjpmYWxzZSwibmFtZSI6ImNvZGU0Y2xvdWRzIiwidHlwZSI6ImRvY2tlci1odWIiLCJ1cmwiOiJodHRwczovL2h1Yi5kb2NrZXIuY29tIn0nIFwKICAtLWNvbXByZXNzZWQgXAogIC0taW5zZWN1cmUKCiMgQ3JlYXRlIFJlcGxpY2EKY3VybCAtdSAiYWRtaW46SGFyYm9yMTIzNDUiIFwKICAtSCAiQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uIiBcCiAgLWtpIGh0dHBzOi8vYW1hYWtzL2FwaS92Mi4wL3JlcGxpY2F0aW9uL3BvbGljaWVzIFwKICAtLWRhdGEtYmluYXJ5ICd7Im5hbWUiOiJjb2RlNGNsb3VkcyIsImRlc2NyaXB0aW9uIjoiIiwic3JjX3JlZ2lzdHJ5Ijp7ImlkIjoxLCJuYW1lIjoiY29kZTRjbG91ZHMiLCJkZXNjcmlwdGlvbiI6IiIsInR5cGUiOiJkb2NrZXItaHViIiwidXJsIjoiaHR0cHM6Ly9odWIuZG9ja2VyLmNvbSIsInRva2VuX3NlcnZpY2VfdXJsIjoiIiwiY3JlZGVudGlhbCI6eyJ0eXBlIjoiIiwiYWNjZXNzX2tleSI6IiIsImFjY2Vzc19zZWNyZXQiOiIifSwiaW5zZWN1cmUiOmZhbHNlLCJzdGF0dXMiOiJoZWFsdGh5IiwiY3JlYXRpb25fdGltZSI6IjIwMjAtMTAtMjFUMDU6NDg6NDkuMzA1NzYyWiIsInVwZGF0ZV90aW1lIjoiMjAyMC0xMC0yMVQwNjowMTo1Ny4zMzQwMDNaIn0sImRlc3RfcmVnaXN0cnkiOm51bGwsImRlc3RfbmFtZXNwYWNlIjpudWxsLCJ0cmlnZ2VyIjp7InR5cGUiOiJtYW51YWwiLCJ0cmlnZ2VyX3NldHRpbmdzIjp7ImNyb24iOiIifX0sImVuYWJsZWQiOnRydWUsImRlbGV0aW9uIjpmYWxzZSwib3ZlcnJpZGUiOmZhbHNlLCJmaWx0ZXJzIjpbeyJ0eXBlIjoibmFtZSIsInZhbHVlIjoiY29kZTRjbG91ZHMvKioifV19JyBcCiAgLS1jb21wcmVzc2VkIFwKICAtLWluc2VjdXJlCgojIEV4ZWN1dGUgUmVwbGljYSAKY3VybCAtdSAiYWRtaW46SGFyYm9yMTIzNDUiIFwKICAtSCAiQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uIiBcCiAgLWtpIGh0dHBzOi8vYW1hYWtzL2FwaS92Mi4wL3JlcGxpY2F0aW9uL2V4ZWN1dGlvbnMgXAogIC0tZGF0YS1iaW5hcnkgJ3sicG9saWN5X2lkIjoxfScgXAogIC0tY29tcHJlc3NlZCBcCiAgLS1pbnNlY3VyZQoKc2xlZXAgMzAgIyB3YWl0IHRpbWUgdG8gbGV0IGhhcmJvciBjb3B5IHRoZSBpbWFnZXMKZWNobyAiU2VlZGluZyBIYXJib3IgQ29tcGxldGVkLi4uIgpjZCAuLgoKIyBJbnN0YWxsIEt1YmVDdGwKc3VkbyBhcHQtZ2V0IHVwZGF0ZSAmJiBzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSBhcHQtdHJhbnNwb3J0LWh0dHBzIGdudXBnMiBjdXJsCmN1cmwgLXMgaHR0cHM6Ly9wYWNrYWdlcy5jbG91ZC5nb29nbGUuY29tL2FwdC9kb2MvYXB0LWtleS5ncGcgfCBzdWRvIGFwdC1rZXkgYWRkIC0KZWNobyAiZGViIGh0dHBzOi8vYXB0Lmt1YmVybmV0ZXMuaW8vIGt1YmVybmV0ZXMteGVuaWFsIG1haW4iIHwgc3VkbyB0ZWUgLWEgL2V0Yy9hcHQvc291cmNlcy5saXN0LmQva3ViZXJuZXRlcy5saXN0CnN1ZG8gYXB0LWdldCB1cGRhdGUKc3VkbyBhcHQtZ2V0IGluc3RhbGwgLXkga3ViZWN0bAoKIyBJbnN0YWxsIEF6CmN1cmwgLXNMIGh0dHBzOi8vYWthLm1zL0luc3RhbGxBenVyZUNMSURlYiB8IHN1ZG8gYmFzaAoKIyBDb3B5IHRoZSBkZXBsb3ltZW50IGZpbGVzIGZvciB0aGUgQUtTIGNvbmZpZ3VyYXRpb24Kd2dldCBodHRwczovL2dpdGh1Yi5jb20vc3V3YW5pMTIzL2RlbW8tYW1hLWFrcy9ibG9iL21haW4vYWtzLWhhcmJvci1jYS1kYWVtb25zZXQueWFtbCAKd2dldCBodHRwczovL2dpdGh1Yi5jb20vc3V3YW5pMTIzL2RlbW8tYW1hLWFrcy9ibG9iL21haW4va2FuYXJ5LWRlcGxveW1lbnQueWFtbCAKd2dldCBodHRwczovL2dpdGh1Yi5jb20vc3V3YW5pMTIzL2RlbW8tYW1hLWFrcy9ibG9iL21haW4va2FuYXJ5LXNlcnZpY2UueWFtbCAKd2dldCBodHRwczovL2dpdGh1Yi5jb20vc3V3YW5pMTIzL2RlbW8tYW1hLWFrcy9ibG9iL21haW4vYWtzLXNldHVwLnNoCnN1ZG8gY2htb2QgK3ggYWtzLXNldHVwLnNoCi4vYWtzLXNldHVwLnNoICQxCgpleGl0OwoKIyBUZXN0aW5nIHRoZSByZWdpc3RyeSBieSB1cGxvYWQgYSBjb250YWluZXIgdG8gYW1hYWtzCiNzdWRvIGRvY2tlciBsb2dpbiBhbWFha3M6NDQzIC11IGFkbWluCiNzdWRvIGRvY2tlciB0YWcgY29kZTRjbG91ZHMvY2FuYXJ5a29udGFpbmVyOjEuMSBhbWFha3M6NDQzL2xpYnJhcnkvY2FuYXJ5a29udGFpbmVyOjEuMQojc3VkbyBkb2NrZXIgcHVzaCBhbWFha3M6NDQzL2xpYnJhcnkvY2FuYXJ5a29udGFpbmVyOjEuMQojU2V0dXAgcmVwbGljYXRpb24gZm9yIGRvY2tlcmh1YiAoY2hlY2sgdGhlIHBpY3R1cmVzIG9uIGhvdyB0byBkbyB0aGlzKQojc3VkbyBkb2NrZXIgcHVsbCBhbWFha3M6NDQzL2NvZGU0Y2xvdWRzL2NhbmFyeWtvbnRhaW5lcjoxLjI="
+  },
+  "resources": [
+    {
+      "apiVersion": "2020-08-01",
+      "name": "[variables('workspaceName')]",
+      "location": "[parameters('location')]",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "properties": {
+        "sku": {
+          "name": "[parameters('workspaceSku')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2020-05-01",
+      "name": "[parameters('virtualNetworks_amaaks_name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "default",
+            "properties": {
+              "addressPrefix": "10.0.0.0/22",
+              "privateEndpointNetworkPolicies": "Enabled",
+              "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+          }
+        ],
+        "enableDdosProtection": false,
+        "enableVmProtection": false
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks/subnets",
+      "apiVersion": "2020-05-01",
+      "name": "[concat(parameters('virtualNetworks_amaaks_name'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_amaaks_name'))]"
+      ],
+      "properties": {
+        "addressPrefix": "10.0.0.0/22",
+        "privateEndpointNetworkPolicies": "Enabled",
+        "privateLinkServiceNetworkPolicies": "Enabled"
+      }
+    },
+    {
+      "name": "[parameters('networkInterfaceName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2019-11-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkSecurityGroups/', parameters('networkSecurityGroupName'))]",
+        "[concat('Microsoft.Network/publicIpAddresses/', parameters('publicIpAddressName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_amaaks_name'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              },
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIpAddress": {
+                "id": "[resourceId(resourceGroup().name, 'Microsoft.Network/publicIpAddresses', parameters('publicIpAddressName'))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[variables('nsgId')]"
+        }
+      }
+    },
+    {
+      "name": "[parameters('networkSecurityGroupName')]",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2019-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": "[parameters('networkSecurityGroupRules')]"
+      }
+    },
+    {
+      "name": "[parameters('publicIpAddressName')]",
+      "type": "Microsoft.Network/publicIpAddresses",
+      "apiVersion": "2019-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publicIpAllocationMethod": "[parameters('publicIpAddressType')]"
+      },
+      "sku": {
+        "name": "[parameters('publicIpAddressSku')]"
+      },
+      "zones": [
+        "[parameters('zone')]"
+      ]
+    },
+    {
+      "name": "[parameters('k8sIpAddressName')]",
+      "type": "Microsoft.Network/publicIpAddresses",
+      "apiVersion": "2019-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publicIpAllocationMethod": "Static",
+        "idleTimeoutInMinutes": 4,
+        "publicIPAddressVersion": "IPv4"
+      },
+      "sku": {
+        "name": "[parameters('publicIpAddressSku')]"
+      }
+    },
+    {
+
+      "name": "[parameters('virtualMachineName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2019-07-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('networkInterfaceName'))]",
+        "[resourceId('Microsoft.ContainerService/managedClusters/', parameters('clusterName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('virtualMachineSize')]"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "createOption": "fromImage",
+            "managedDisk": {
+              "storageAccountType": "[parameters('osDiskType')]"
+            }
+          },
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "18.04-LTS",
+            "version": "latest"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('networkInterfaceName'))]"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "[parameters('virtualMachineHostnameName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": false
+          }
+        }
+      },
+      "zones": [
+        "[parameters('zone')]"
+      ]
+    },
+    {
+      "name": "[concat(parameters('virtualMachineName'),'/CustomScriptExtension')]",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2019-07-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/',parameters('virtualMachineName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "protectedSettings": {
+          "commandToExecute": "[concat('echo -n ',  variables('vm-script'),' | base64 --decode > /tmp/vmoffer-setup.sh && chmod +x /tmp/vmoffer-setup.sh && /tmp/vmoffer-setup.sh ', listClusterAdminCredential(parameters('clusterName'), '2020-03-01').kubeconfigs[0].value, ' ', variables('resourceGroup'), ' ', reference(parameters('k8sIpAddressName')).ipAddress )]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2020-03-01",
+      "type": "Microsoft.ContainerService/managedClusters",
+      "name": "[parameters('clusterName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_amaaks_name'))]",
+        "[resourceId('Microsoft.Network/publicIpAddresses', parameters('k8sIpAddressName'))]"
+      ],
+      "properties": {
+        "kubernetesVersion": "[parameters('kubernetesVersion')]",
+        "enableRBAC": "[parameters('enableRBAC')]",
+        "dnsPrefix": "[parameters('dnsPrefix')]",
+        "agentPoolProfiles": [
+          {
+            "name": "agentpool",
+            "osDiskSizeGB": "[parameters('osDiskSizeGB')]",
+            "count": 3,
+            "vmSize": "Standard_DS2_v2",
+            "osType": "Linux",
+            "storageProfile": "ManagedDisks",
+            "type": "VirtualMachineScaleSets",
+            "mode": "System",
+            "maxPods": 110,
+            "availabilityZones": [
+              "1",
+              "2",
+              "3"
+            ],
+            "vnetSubnetID": "[variables('subnetRef')]"
+          }
+        ],
+        "networkProfile": {
+          "loadBalancerSku": "standard",
+          "networkPlugin": "[parameters('networkPlugin')]",
+          "serviceCidr": "[parameters('serviceCidr')]",
+          "dnsServiceIP": "[parameters('dnsServiceIP')]",
+          "dockerBridgeCidr": "[parameters('dockerBridgeCidr')]"
+        },
+        "apiServerAccessProfile": {
+          "enablePrivateCluster": "[parameters('enablePrivateCluster')]"
+        },
+        "addonProfiles": {
+          "httpApplicationRouting": {
+            "enabled": "[parameters('enableHttpApplicationRouting')]"
+          },
+          "azurePolicy": {
+            "enabled": "[parameters('enableAzurePolicy')]"
+          },
+          "omsagent": {
+            "enabled": "[parameters('enableOmsAgent')]",
+            "config": {
+              "logAnalyticsWorkspaceResourceID": "[resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            }
+          }
+        }
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "SolutionDeployment",
+      "apiVersion": "2019-09-01",
+      "resourceGroup": "[split(resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName')),'/')[4]]",
+      "subscriptionId": "[split(resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName')),'/')[2]]",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "apiVersion": "2015-11-01-preview",
+              "type": "Microsoft.OperationsManagement/solutions",
+              "location": "[parameters('location')]",
+              "name": "[concat('ContainerInsights', '(', split(resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName')),'/')[8], ')')]",
+              "properties": {
+                "workspaceResourceId": "[resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+              },
+              "plan": {
+                "name": "[concat('ContainerInsights', '(', split(resourceId(variables('resourceGroup'), 'Microsoft.OperationalInsights/workspaces', variables('workspaceName')),'/')[8], ')')]",
+                "product": "[concat('OMSGallery/', 'ContainerInsights')]",
+                "promotionCode": "",
+                "publisher": "Microsoft"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/',variables('workspaceName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "ClusterSubnetRoleAssignmentDeployment",
+      "apiVersion": "2019-09-01",
+      "resourceGroup": "[resourceGroup().name]",
+      "subscriptionId": "[subscription().subscriptionId]",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets/providers/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "name": "[concat(parameters('virtualNetworks_amaaks_name'), '/', parameters('subnetName'), '/Microsoft.Authorization/', guid(resourceGroup().id, deployment().name))]",
+              "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '4d97b98b-1d4f-4787-a291-c67834d212e7')]",
+                "principalId": "[reference(parameters('clusterName')).identityProfile.kubeletidentity.objectId]",
+                "scope": "[variables('subnetRef')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+      ]
+    },
+    {
+      "apiVersion": "2020-06-01",
+      "name": "pid-2740d3f4-b886-4765-9966-581f6e0271d9",
+      "type": "Microsoft.Resources/deployments",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "solutionIp": {
+      "type": "string",
+      "value": "[reference(parameters('k8sIpAddressName')).ipAddress]"
+    },
+    "registryIp": {
+      "type": "string",
+      "value": "[reference(parameters('publicIpAddressName')).ipAddress]"
+    },
+    "location": {
+      "type": "string",
+      "value": "[parameters('location')]"
+    },
+    "k8config": {
+      "type": "object",
+      "value": "[listClusterAdminCredential(parameters('clusterName'), '2020-03-01')]"
+    }
+  }
+}
