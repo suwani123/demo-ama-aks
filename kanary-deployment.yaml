@@ -16,7 +16,7 @@ spec:
     spec:
       containers:      
       - name: kanary        
-        image: amaaks:443/code4clouds/canarykontainer:1.2
+        image: code4clouds/canarykontainer:1.2
         resources:
           requests:
             memory: "64Mi"
