@@ -1,8 +1,17 @@
 #!/bin/bash
-
+# set -x
 # Requires Ubuntu host 18.04 DS2_V2 using hostname and user amaaks
+# This script needs to be converted to b64 if used on a clean ubuntu install and not a 'cooked' image.  The resulting script is in the mainTemplate.json.
+# base64 -w 0 vmoffer-fullscript.sh > vmoffer-fullscript.sh.b64
 
+
+# If the Ubuntu image is clean then install the tools
+if ! pgrep -x "dockerd" >/dev/null
+then
+    echo "Configuring this clena image..." 
+    
 # Install Docker https://docs.docker.com/engine/install/ubuntu/
+
 sudo apt-get updates
 sudo apt-get upgrade -y
 sudo apt-get install -y \
@@ -14,9 +23,9 @@ sudo apt-get install -y \
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo apt-key fingerprint 0EBFCD88
 sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
-   stable"
+  "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) \
+  stable"
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 sudo usermod -aG docker amaaks
@@ -80,7 +89,7 @@ sudo systemctl restart docker
 
 ## Configure Harber hostname and cert-key location
 # cp harbor.yml.tmpl harbor.yml
-wget https://github.com/suwani123/demo-ama-aks/blob/main/harbor.yml
+wget https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/harbor.yml
 #  certificate: /etc/docker/certs.d/amaaks:443/amaaks.cert
 #  private_key: /etc/docker/certs.d/amaaks:443/amaaks.key
 sudo ./prepare
@@ -140,12 +149,63 @@ sudo apt-get install -y kubectl
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
 # Copy the deployment files for the AKS configuration
-wget https://github.com/suwani123/demo-ama-aks/blob/main/aks-harbor-ca-daemonset.yaml 
-wget https://github.com/suwani123/demo-ama-aks/blob/main/kanary-deployment.yaml 
-wget https://github.com/suwani123/demo-ama-aks/blob/main/kanary-service.yaml 
-wget https://github.com/suwani123/demo-ama-aks/blob/main/aks-setup.sh
-sudo chmod +x aks-setup.sh
-./aks-setup.sh $1
+wget https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/aks-harbor-ca-daemonset.yaml
+wget https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/kanary-deployment.yaml 
+wget https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/kanary-service.yaml 
+
+echo "Configured the cleaned image."
+fi # End image check
+
+# Save the kubeconfig locally
+if [ "$#" -ne 0 ]
+  then 
+    echo "Converting kubeconfig..."
+    echo $1
+    echo $1 > kube.config.b64
+    cat kube.config.b64 | base64 --decode > kube.config
+    cat kube.config
+    echo "Converted kubeconfig."
+  else 
+    echo "Getting kubeconfig using az get-creadentials..."
+    az aks get-credentials --resource-group amaaksv2 --name amaaks --admin
+    echo "Completed kubeconfig"
+fi
+
+cat <<EOF | kubectl apply --kubeconfig=kube.config -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-ca
+  namespace: kube-system
+type: Opaque
+data:
+  registry-ca: $(cat ./harbor/ca.crt | base64 -w 0 | tr -d '\n')
+EOF
+
+kubectl apply -f aks-harbor-ca-daemonset.yaml  --kubeconfig=kube.config 
+kubectl create secret docker-registry amaaksregcred --docker-server=amaaks --docker-username=susendocker --docker-password=Test2022@123 --docker-email=ssenani@gmail.com --kubeconfig=kube.config
+
+# Deploy containers
+kubectl apply -f kanary-deployment.yaml --kubeconfig=kube.config
+
+cat <<EOF | kubectl apply --kubeconfig=kube.config -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: kanary-service
+  annotations:
+    # service.beta.kubernetes.io/azure-load-balancer-resource-group: $2
+spec:
+  type: LoadBalancer
+  selector:
+    app: kanary
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  # loadBalancerIP: $3
+EOF
+
 
 exit;
 
