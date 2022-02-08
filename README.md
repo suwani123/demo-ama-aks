@@ -13,6 +13,8 @@ The Managed Application offers allow the publisher to access and control the res
 - Via deployment scripts 
 - Via helm charts 
 
+# Prerequisites  
+
 # Setup the manage application via VM 
 - Create Azure Ubuntu VM
 - Download the setup script
