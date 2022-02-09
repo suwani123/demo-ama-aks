@@ -15,7 +15,8 @@ The Managed Application offers allow the publisher to access and control the res
 
 # Prerequisites  
 1. ARM template preperation [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/mainTemplate.json)
-2. UI Defenition 
+2. UI Defenition [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/createUiDefinition.json)
+3. Custom script which run inside the vm offer [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/vmoffer-setup.sh)
 
 # Setup the manage application via VM 
 - Create Azure Ubuntu VM
