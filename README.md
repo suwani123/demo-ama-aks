@@ -14,6 +14,8 @@ The Managed Application offers allow the publisher to access and control the res
 - Via helm charts 
 
 # Prerequisites  
+1. ARM template preperation [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/mainTemplate.json)
+2. UI Defenition 
 
 # Setup the manage application via VM 
 - Create Azure Ubuntu VM
