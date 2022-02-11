@@ -18,11 +18,11 @@ The Managed Application offers allow the publisher to access and control the res
 2. UI Defenition [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/createUiDefinition.json)
 3. Custom script which run inside the vm offer [(Refer the attached sample file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/vmoffer-setup.sh)
 
-# Setup the manage application via VM 
-- Create Azure Ubuntu VM
-- Download the setup script
-wget https://raw.githubusercontent.com/code4clouds/amaaks/main/vmoffer-setup.sh
-cat ./vmoffer-setup.sh | base64 -w 0 # to use for script for VM custom extension script (optional)
-sudo chmod +x ./vmoffer-setup.sh
- ./vmofffer-setup.sh
+# Setup the test the manage application via azure portal
+- Create Azure package into a .zip file [(refer the sample zip file)](https://raw.githubusercontent.com/suwani123/demo-ama-aks/main/ama-aks.zip)
+- Upload it into a storage account 
+- create the Service Catalog Managed Application Definition
+- Service Catalog Managed Application 
 - 
+
+# Refererence 
