@@ -25,7 +25,7 @@ The Managed Application offers allow the publisher to access and control the res
 - Service Catalog Managed Application 
 - Run the application
 
-# Refererence 
+# Reference 
 - [Azure manage application overview](https://docs.microsoft.com/en-us/azure/marketplace/plan-azure-app-managed-app)
 - [Sample Azure Managed Application with AKS](https://github.com/arsenvlad/azure-managed-app-aks-managed-identity/tree/master/ama-aks)
 - [Video Learning Modules from Hands-on Workshop](https://github.com/microsoft/Mastering-the-Marketplace/tree/main/ama)
