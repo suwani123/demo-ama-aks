@@ -9,7 +9,7 @@ The Solution Template offers are not changeable by the publisher after customer 
 The Managed Application offers allow the publisher to access and control the resources created during deployment in the customer’s subscription. Therefore, containers and Azure Kubernetes Service (AKS) resources are provisionally allowed in this offer category.
 
 # Manage Applications can have different approach 
-- Via VM by executing custom scripts 
+- Via VM offer by executing custom scripts 
 - Via deployment scripts 
 - Via helm charts 
 
